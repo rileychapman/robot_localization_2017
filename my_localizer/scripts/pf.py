@@ -142,13 +142,14 @@ class ParticleFilter:
 
         # TODO: assign the lastest pose into self.robot_pose as a geometry_msgs.Pose object
         largest_weight = 0.0
-        mode_partice = Particle()
+        mode_particle = Particle()
         for particle in self.particle_cloud:
             if particle.w > largest_weight:
                 largest_weight = particle.w
-                mode_partice = particle
+                mode_particle = particle
 
-        pose = Pose(point = Point(x=mode_partice[0], y=mode_partice[1]), orientation = quaternion_from_euler(0,0,mode_partice[2]))
+        qaurt_array = tf.transformations.quaternion_from_euler(0,0,mode_particle.theta)
+        pose = Pose(position = Point(x=mode_particle.x, y=mode_particle.y), orientation = Quaternion(x = qaurt_array[0], y = qaurt_array[1], z = qaurt_array[2], w = qaurt_array[3]) )
 
         # just to get started we will fix the robot's pose to always be at the origin
         self.robot_pose = pose
@@ -255,6 +256,7 @@ class ParticleFilter:
             Arguments
             xy_theta: a triple consisting of the mean x, y, and theta (yaw) to initialize the
                       particle cloud around.  If this input is ommitted, the odometry will be used """
+        print "Initializing the particle cloud!"
         if xy_theta == None:
             xy_theta = convert_pose_to_xy_and_theta(self.odom_pose.pose)
         self.particle_cloud = []
@@ -317,6 +319,8 @@ class ParticleFilter:
         self.odom_pose = self.tf_listener.transformPose(self.odom_frame, p)
         # store the the odometry pose in a more convenient format (x,y,theta)
         new_odom_xy_theta = convert_pose_to_xy_and_theta(self.odom_pose.pose)
+
+        #print "current_odom_xy_theta: " + str(self.current_odom_xy_theta)
 
         if not(self.particle_cloud):
             # now that we have all of the necessary transforms we can update the particle cloud
