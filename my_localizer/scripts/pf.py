@@ -199,22 +199,22 @@ class ParticleFilter:
         for particle in self.particle_cloud:
             probabilities.append(particle.w)
 
-        samples = draw_random_sample(self.particle_cloud,probabilities,self.n_particles*0.1)
+        samples = self.draw_random_sample(self.particle_cloud,probabilities,self.n_particles*0.1)
 
         self.particle_cloud = []
         for particle in samples:
-            self.particle_cloud.append([particle]*10)
+            self.particle_cloud += [particle]*10
 
 
     def update_particles_with_laser(self, msg):
         """ Updates the particle weights in response to the scan contained in the msg """
         for particle in self.particle_cloud:
             weight = 0
-            for i,distance in enumerate(msg.scan.ranges):
-                theta = particle[2] #particle angle
+            for i,distance in enumerate(msg.ranges):
+                theta = particle.theta #particle angle
                 phi = i * math.pi/180 #scan angle
-                point_x = particle[0] + distance*math.cos(theta+phi)
-                point_y = particle[1] + distance*math.sin(theta+phi)
+                point_x = particle.x + distance*math.cos(theta+phi)
+                point_y = particle.y + distance*math.sin(theta+phi)
                 weight += self.occupancy_field.get_closest_obstacle_distance(point_x, point_y)
             particle.w = weight
 
