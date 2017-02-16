@@ -87,7 +87,7 @@ class ParticleFilter:
         self.odom_frame = "odom"        # the name of the odometry coordinate frame
         self.scan_topic = "scan"        # the topic where we will get laser scans from 
 
-        self.n_particles = 300          # the number of particles to use
+        self.n_particles = 10          # the number of particles to use
 
         self.d_thresh = 0.2             # the amount of linear movement before performing an update
         self.a_thresh = math.pi/6       # the amount of angular movement before performing an update
@@ -176,10 +176,15 @@ class ParticleFilter:
             return
 
         # For added difficulty: Implement sample_motion_odometry (Prob Rob p 136)
-        for particle in self.particle_cloud:
-            particle.x += gauss(delta[0], delta[0]*0.1)
-            particle.y += gauss(delta[1], delta[1]*0.1)
-            particle.theta += gauss(delta[2], delta[2]*0.1)
+        for i,particle in enumerate(self.particle_cloud):
+            #print "X before: " +  str(particle.x)
+            particle.x += delta[0] #gauss(delta[0], delta[0]*0.1)
+            #print "X after: " + str(particle.x)
+            particle.y += delta[1] #gauss(delta[1], delta[1]*0.1)
+            particle.theta += delta[2] #gauss(delta[2], delta[2]*0.1)
+            print i, particle.x, particle.y
+
+
 
     def map_calc_range(self,x,y,theta):
         """ Difficulty Level 3: implement a ray tracing likelihood model... Let me know if you are interested """
@@ -199,11 +204,11 @@ class ParticleFilter:
         for particle in self.particle_cloud:
             probabilities.append(particle.w)
 
-        samples = self.draw_random_sample(self.particle_cloud,probabilities,self.n_particles*0.1)
+        samples = self.draw_random_sample(self.particle_cloud,probabilities,self.n_particles*0.5)
 
         self.particle_cloud = []
         for particle in samples:
-            self.particle_cloud += [particle]*10
+            self.particle_cloud += [particle]*2
 
 
     def update_particles_with_laser(self, msg):
@@ -373,4 +378,7 @@ if __name__ == '__main__':
     while not(rospy.is_shutdown()):
         # in the main loop all we do is continuously broadcast the latest map to odom transform
         n.broadcast_last_transform()
-        r.sleep()
+        try:
+            r.sleep()
+        except rospy.exceptions.ROSTimeMovedBackwardsException:
+            print "time went backwards"
