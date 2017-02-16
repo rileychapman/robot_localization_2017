@@ -178,10 +178,10 @@ class ParticleFilter:
         # For added difficulty: Implement sample_motion_odometry (Prob Rob p 136)
         for i,particle in enumerate(self.particle_cloud):
             #print "X before: " +  str(particle.x)
-            particle.x += delta[0] #gauss(delta[0], delta[0]*0.1)
+            particle.x += gauss(delta[0], delta[0]*0.1)
             #print "X after: " + str(particle.x)
-            particle.y += delta[1] #gauss(delta[1], delta[1]*0.1)
-            particle.theta += delta[2] #gauss(delta[2], delta[2]*0.1)
+            particle.y += gauss(delta[1], delta[1]*0.1)
+            particle.theta += gauss(delta[2], delta[2]*0.1)
             print i, particle.x, particle.y
 
 
@@ -207,8 +207,11 @@ class ParticleFilter:
         samples = self.draw_random_sample(self.particle_cloud,probabilities,self.n_particles*0.5)
 
         self.particle_cloud = []
-        for particle in samples:
+        print "vvv samples"
+        for i,particle in enumerate(samples):
+            print i,sample.x, sample.y
             self.particle_cloud += [particle]*2
+        print "^^^^^^^ samples"
 
 
     def update_particles_with_laser(self, msg):
