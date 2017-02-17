@@ -20,6 +20,7 @@ import math
 import time
 
 import numpy as np
+import matplotlib.pyplot as plt
 from numpy.random import random_sample
 from sklearn.neighbors import NearestNeighbors
 from occupancy_field import OccupancyField
@@ -117,6 +118,9 @@ class ParticleFilter:
 
         self.current_odom_xy_theta = []
 
+        self.fig = plt.figure()
+        self.fig.show()
+
         # request the map from the map server, the map should be of type nav_msgs/OccupancyGrid
         # TODO: fill in the appropriate service call here.  The resultant map should be assigned be passed
         #       into the init method for OccupancyField
@@ -182,7 +186,7 @@ class ParticleFilter:
             #print "X after: " + str(particle.x)
             particle.y += gauss(delta[1], delta[1]*0.1)
             particle.theta += gauss(delta[2], delta[2]*0.1)
-            print i, particle.x, particle.y
+            # print i, particle.x, particle.y
 
 
 
@@ -204,14 +208,22 @@ class ParticleFilter:
         for particle in self.particle_cloud:
             probabilities.append(particle.w)
 
-        samples = self.draw_random_sample(self.particle_cloud,probabilities,self.n_particles*0.5)
+        samples = self.draw_random_sample(self.particle_cloud,probabilities,int(self.n_particles*0.5))
+
+        print "Before Resampling:"
+        for i, particle in enumerate(self.particle_cloud):
+            print i, particle.x, particle.y
 
         self.particle_cloud = []
         print "vvv samples"
         for i,particle in enumerate(samples):
-            print i,sample.x, sample.y
+            print i,particle.x, particle.y
             self.particle_cloud += [particle]*2
         print "^^^^^^^ samples"
+
+        print "After Resampling:"
+        for i, particle in enumerate(self.particle_cloud):
+            print i, particle.x, particle.y
 
 
     def update_particles_with_laser(self, msg):
@@ -347,7 +359,9 @@ class ParticleFilter:
             self.resample_particles()               # resample particles to focus on areas of high density
             self.fix_map_to_odom_transform(msg)     # update map to odom transform now that we have new particles
         # publish particles (so things like rviz can see them)
+        self.visualize_particles()
         self.publish_particles(msg)
+
 
     def fix_map_to_odom_transform(self, msg):
         """ This method constantly updates the offset of the map and 
@@ -373,6 +387,20 @@ class ParticleFilter:
                                           rospy.get_rostime(),
                                           self.odom_frame,
                                           self.map_frame)
+
+    def visualize_particles(self):
+        x = np.array([])
+        y = np.array([])
+        for particle in self.particle_cloud:
+            x = np.append(x, particle.x)
+            y = np.append(y, particle.y)
+
+        heatmap, xedges, yedges = np.histogram2d(x, y, bins=20)
+        extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
+
+        self.fig.clf()
+        plt.imshow(heatmap.T, extent=extent, origin='lower')
+        # self.fig.show()
 
 if __name__ == '__main__':
     n = ParticleFilter()
