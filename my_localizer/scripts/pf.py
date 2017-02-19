@@ -30,6 +30,7 @@ from helper_functions import (convert_pose_inverse_transform,
                               convert_pose_to_xy_and_theta,
                               angle_diff)
 
+
 class Particle(object):
     """ Represents a hypothesis (particle) of the robot's pose consisting of x,y and theta (yaw)
         Attributes:
@@ -208,22 +209,23 @@ class ParticleFilter:
         for particle in self.particle_cloud:
             probabilities.append(particle.w)
 
+        # print "Probability sum: " + str(np.sum(probabilities))
         samples = self.draw_random_sample(self.particle_cloud,probabilities,int(self.n_particles*0.5))
 
-        print "Before Resampling:"
-        for i, particle in enumerate(self.particle_cloud):
-            print i, particle.x, particle.y
+        # print "Before Resampling:"
+        # for i, particle in enumerate(self.particle_cloud):
+        #     print i, particle.x, particle.y
 
         self.particle_cloud = []
-        print "vvv samples"
+        # print "vvv samples"
         for i,particle in enumerate(samples):
-            print i,particle.x, particle.y
+            # print i,particle.x, particle.y
             self.particle_cloud += [particle]*2
-        print "^^^^^^^ samples"
+        # print "^^^^^^^ samples"
 
-        print "After Resampling:"
-        for i, particle in enumerate(self.particle_cloud):
-            print i, particle.x, particle.y
+        # print "After Resampling:"
+        # for i, particle in enumerate(self.particle_cloud):
+        #     print i, particle.x, particle.y
 
 
     def update_particles_with_laser(self, msg):
@@ -235,7 +237,12 @@ class ParticleFilter:
                 phi = i * math.pi/180 #scan angle
                 point_x = particle.x + distance*math.cos(theta+phi)
                 point_y = particle.y + distance*math.sin(theta+phi)
+
+                # TODO: add sensor model, boundary conditions
                 weight += self.occupancy_field.get_closest_obstacle_distance(point_x, point_y)
+                
+                distance = self.occupancy_field.get_closest_obstacle_distance(point_x, point_y)
+
             particle.w = weight
 
     @staticmethod
@@ -255,6 +262,7 @@ class ParticleFilter:
             probabilities: the probability of selecting each element in choices represented as a list
             n: the number of samples
         """
+
         values = np.array(range(len(choices)))
         probs = np.array(probabilities)
         bins = np.add.accumulate(probs)
@@ -293,13 +301,21 @@ class ParticleFilter:
     def normalize_particles(self):
         """ Make sure the particle weights define a valid distribution (i.e. sum to 1.0) """
         #sum all of self.particle_cloud weights
+        
+        # TODO: fix
+
         total_weight = 0.0
         for particle in self.particle_cloud:
             total_weight += particle.w
         #divide each weight by that sum
+        print "Total weight before: " + str(total_weight)
+
+        total_weight_after = 0.0
         for particle in self.particle_cloud:
-            particle.w /= total_weight
-        
+            particle.w = particle.w / total_weight
+            total_weight_after += particle.w
+        print "Total weight after: " + str(total_weight_after)
+
     def publish_particles(self, msg):
         particles_conv = []
         for p in self.particle_cloud:
@@ -359,7 +375,6 @@ class ParticleFilter:
             self.resample_particles()               # resample particles to focus on areas of high density
             self.fix_map_to_odom_transform(msg)     # update map to odom transform now that we have new particles
         # publish particles (so things like rviz can see them)
-        self.visualize_particles()
         self.publish_particles(msg)
 
 
@@ -398,8 +413,22 @@ class ParticleFilter:
         heatmap, xedges, yedges = np.histogram2d(x, y, bins=20)
         extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
 
+        # print heatmap
+
         self.fig.clf()
-        plt.imshow(heatmap.T, extent=extent, origin='lower')
+
+        subplot = self.fig.add_subplot(1,1,1)
+        subplot.imshow(heatmap.T, extent=extent, origin='lower')
+        # subplot.show()
+        # subplot.plot([0,1], [0,1], 'b-')
+        # subplot.hold(True)
+        # subplot.set_xlim([0,1])
+        # subplot.set_ylim([0,1])
+        plt.draw()
+        plt.pause(.01)
+        # plt.imshow(heatmap.T, extent=extent, origin='lower')
+        # plt.pause(0.01)
+        # plt.show()
         # self.fig.show()
 
 if __name__ == '__main__':
@@ -409,6 +438,7 @@ if __name__ == '__main__':
     while not(rospy.is_shutdown()):
         # in the main loop all we do is continuously broadcast the latest map to odom transform
         n.broadcast_last_transform()
+        # n.visualize_particles()
         try:
             r.sleep()
         except rospy.exceptions.ROSTimeMovedBackwardsException:
