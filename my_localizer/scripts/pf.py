@@ -24,6 +24,7 @@ import matplotlib.pyplot as plt
 from numpy.random import random_sample
 from sklearn.neighbors import NearestNeighbors
 from occupancy_field import OccupancyField
+from scipy.stats import norm
 
 from helper_functions import (convert_pose_inverse_transform,
                               convert_translation_rotation_to_pose,
@@ -56,7 +57,9 @@ class Particle(object):
         orientation_tuple = tf.transformations.quaternion_from_euler(0,0,self.theta)
         return Pose(position=Point(x=self.x,y=self.y,z=0), orientation=Quaternion(x=orientation_tuple[0], y=orientation_tuple[1], z=orientation_tuple[2], w=orientation_tuple[3]))
 
-    # TODO: define additional helper functions if needed
+    def normalize_weight(self, total_weight):
+        """adjust the particle weight using the normalization factor"""
+        self.w /= total_weight
 
 class ParticleFilter:
     """ The class that represents a Particle Filter ROS Node
@@ -97,6 +100,8 @@ class ParticleFilter:
         self.laser_max_distance = 2.0   # maximum penalty to assess in the likelihood field model
 
         # TODO: define additional constants if needed
+
+        self.model_noise_rate = 0.05
 
         # Setup pubs and subs
 
@@ -209,23 +214,12 @@ class ParticleFilter:
         for particle in self.particle_cloud:
             probabilities.append(particle.w)
 
-        # print "Probability sum: " + str(np.sum(probabilities))
         samples = self.draw_random_sample(self.particle_cloud,probabilities,int(self.n_particles*0.5))
 
-        # print "Before Resampling:"
-        # for i, particle in enumerate(self.particle_cloud):
-        #     print i, particle.x, particle.y
-
         self.particle_cloud = []
-        # print "vvv samples"
         for i,particle in enumerate(samples):
-            # print i,particle.x, particle.y
-            self.particle_cloud += [particle]*2
-        # print "^^^^^^^ samples"
-
-        # print "After Resampling:"
-        # for i, particle in enumerate(self.particle_cloud):
-        #     print i, particle.x, particle.y
+            for i in range(2):
+                self.particle_cloud.append(deepcopy(particle))
 
 
     def update_particles_with_laser(self, msg):
@@ -239,9 +233,17 @@ class ParticleFilter:
                 point_y = particle.y + distance*math.sin(theta+phi)
 
                 # TODO: add sensor model, boundary conditions
-                weight += self.occupancy_field.get_closest_obstacle_distance(point_x, point_y)
+                #weight += self.occupancy_field.get_closest_obstacle_distance(point_x, point_y)
                 
                 distance = self.occupancy_field.get_closest_obstacle_distance(point_x, point_y)
+
+                if math.isnan(distance):
+                    distance = 1.0
+
+                point_weight = norm(0, self.model_noise_rate).pdf(distance) + 0.08
+
+                weight += point_weight
+
 
             particle.w = weight
 
@@ -301,20 +303,13 @@ class ParticleFilter:
     def normalize_particles(self):
         """ Make sure the particle weights define a valid distribution (i.e. sum to 1.0) """
         #sum all of self.particle_cloud weights
+
+        total_weight = sum([particle.w for particle in self.particle_cloud])
+        [particle.normalize_weight(total_weight) for particle in self.particle_cloud]
         
-        # TODO: fix
-
-        total_weight = 0.0
-        for particle in self.particle_cloud:
-            total_weight += particle.w
-        #divide each weight by that sum
-        print "Total weight before: " + str(total_weight)
-
-        total_weight_after = 0.0
-        for particle in self.particle_cloud:
-            particle.w = particle.w / total_weight
-            total_weight_after += particle.w
-        print "Total weight after: " + str(total_weight_after)
+        # total_weight_after = sum([particle.w for particle in self.particle_cloud])
+        # print "Total weight after: " + str(total_weight_after)
+        # print (" ".join([str(point.w) for point in self.particle_cloud]))
 
     def publish_particles(self, msg):
         particles_conv = []
@@ -438,7 +433,7 @@ if __name__ == '__main__':
     while not(rospy.is_shutdown()):
         # in the main loop all we do is continuously broadcast the latest map to odom transform
         n.broadcast_last_transform()
-        # n.visualize_particles()
+        n.visualize_particles()
         try:
             r.sleep()
         except rospy.exceptions.ROSTimeMovedBackwardsException:
