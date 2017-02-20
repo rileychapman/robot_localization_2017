@@ -92,7 +92,7 @@ class ParticleFilter:
         self.odom_frame = "odom"        # the name of the odometry coordinate frame
         self.scan_topic = "scan"        # the topic where we will get laser scans from 
 
-        self.n_particles = 10          # the number of particles to use
+        self.n_particles = 100          # the number of particles to use
 
         self.d_thresh = 0.2             # the amount of linear movement before performing an update
         self.a_thresh = math.pi/6       # the amount of angular movement before performing an update
@@ -124,8 +124,11 @@ class ParticleFilter:
 
         self.current_odom_xy_theta = []
 
-        self.fig = plt.figure()
-        self.fig.show()
+        self.normal_dist = norm(0, self.model_noise_rate)
+
+
+        #self.fig = plt.figure()
+        #self.fig.show()
 
         # request the map from the map server, the map should be of type nav_msgs/OccupancyGrid
         # TODO: fill in the appropriate service call here.  The resultant map should be assigned be passed
@@ -140,6 +143,12 @@ class ParticleFilter:
         # for now we have commented out the occupancy field initialization until you can successfully fetch the map
         self.occupancy_field = OccupancyField(got_map.map)
         self.initialized = True
+        print "Initialization complete!"
+
+    def create_pdf_lookup(self):
+        pdf_lookup = {}
+        for distance in arange(5.0, 0.1):
+            self.normal_dist.pdf(distance)
 
     def update_robot_pose(self):
         """ Update the estimate of the robot's pose given the updated particles.
@@ -187,13 +196,9 @@ class ParticleFilter:
 
         # For added difficulty: Implement sample_motion_odometry (Prob Rob p 136)
         for i,particle in enumerate(self.particle_cloud):
-            #print "X before: " +  str(particle.x)
-            particle.x += gauss(delta[0], delta[0]*0.1)
-            #print "X after: " + str(particle.x)
-            particle.y += gauss(delta[1], delta[1]*0.1)
-            particle.theta += gauss(delta[2], delta[2]*0.1)
-            # print i, particle.x, particle.y
-
+            particle.x -= gauss(delta[0], delta[0]*0.2)
+            particle.y -= gauss(delta[1], delta[1]*0.2)
+            particle.theta += gauss(delta[2], delta[2]*0.12)
 
 
     def map_calc_range(self,x,y,theta):
@@ -231,16 +236,13 @@ class ParticleFilter:
                 phi = i * math.pi/180 #scan angle
                 point_x = particle.x + distance*math.cos(theta+phi)
                 point_y = particle.y + distance*math.sin(theta+phi)
-
-                # TODO: add sensor model, boundary conditions
-                #weight += self.occupancy_field.get_closest_obstacle_distance(point_x, point_y)
-                
+               
                 distance = self.occupancy_field.get_closest_obstacle_distance(point_x, point_y)
-
                 if math.isnan(distance):
-                    distance = 1.0
+                    distance = 5.0
 
-                point_weight = norm(0, self.model_noise_rate).pdf(distance) + 0.08
+                #point_weight = self.normal_dist.pdf(distance) + 0.08
+                point_weight = (math.sqrt(2) / math.sqrt(math.pi))  * math.exp(-1 * (distance**2 / 2*(self.model_noise_rate**2))) + 0.05
 
                 weight += point_weight
 
@@ -292,9 +294,9 @@ class ParticleFilter:
         self.particle_cloud = []
         for i in range(self.n_particles):
             particle = Particle()
-            particle.x = gauss(xy_theta[0],0.1)
-            particle.y = gauss(xy_theta[1],0.1)
-            particle.theta = gauss(xy_theta[2],8*math.pi/180)
+            particle.x = gauss(xy_theta[0],0.4)
+            particle.y = gauss(xy_theta[1],0.4)
+            particle.theta = gauss(xy_theta[2],12*math.pi/180)
             self.particle_cloud.append(particle)
 
         self.normalize_particles()
@@ -324,6 +326,7 @@ class ParticleFilter:
         """ This is the default logic for what to do when processing scan data.
             Feel free to modify this, however, I hope it will provide a good
             guide.  The input msg is an object of type sensor_msgs/LaserScan """
+
         if not(self.initialized):
             # wait for initialization to complete
             return
@@ -350,8 +353,6 @@ class ParticleFilter:
         self.odom_pose = self.tf_listener.transformPose(self.odom_frame, p)
         # store the the odometry pose in a more convenient format (x,y,theta)
         new_odom_xy_theta = convert_pose_to_xy_and_theta(self.odom_pose.pose)
-
-        #print "current_odom_xy_theta: " + str(self.current_odom_xy_theta)
 
         if not(self.particle_cloud):
             # now that we have all of the necessary transforms we can update the particle cloud
@@ -408,23 +409,12 @@ class ParticleFilter:
         heatmap, xedges, yedges = np.histogram2d(x, y, bins=20)
         extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
 
-        # print heatmap
-
         self.fig.clf()
 
         subplot = self.fig.add_subplot(1,1,1)
         subplot.imshow(heatmap.T, extent=extent, origin='lower')
-        # subplot.show()
-        # subplot.plot([0,1], [0,1], 'b-')
-        # subplot.hold(True)
-        # subplot.set_xlim([0,1])
-        # subplot.set_ylim([0,1])
         plt.draw()
         plt.pause(.01)
-        # plt.imshow(heatmap.T, extent=extent, origin='lower')
-        # plt.pause(0.01)
-        # plt.show()
-        # self.fig.show()
 
 if __name__ == '__main__':
     n = ParticleFilter()
@@ -433,7 +423,7 @@ if __name__ == '__main__':
     while not(rospy.is_shutdown()):
         # in the main loop all we do is continuously broadcast the latest map to odom transform
         n.broadcast_last_transform()
-        n.visualize_particles()
+        #n.visualize_particles()
         try:
             r.sleep()
         except rospy.exceptions.ROSTimeMovedBackwardsException:
