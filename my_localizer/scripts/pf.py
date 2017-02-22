@@ -4,6 +4,9 @@
 
 import rospy
 
+from dynamic_reconfigure.server import Server
+from my_localizer.cfg import PfConfig
+
 from std_msgs.msg import Header, String
 from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, PoseArray, Pose, Point, Quaternion
@@ -92,7 +95,7 @@ class ParticleFilter:
         self.odom_frame = "odom"        # the name of the odometry coordinate frame
         self.scan_topic = "scan"        # the topic where we will get laser scans from 
 
-        self.n_particles = 100          # the number of particles to use
+        self.n_particles = rospy.get_param('~n_particles', 300)          # the number of particles to use
 
         self.d_thresh = 0.2             # the amount of linear movement before performing an update
         self.a_thresh = math.pi/6       # the amount of angular movement before performing an update
@@ -126,6 +129,7 @@ class ParticleFilter:
 
         self.normal_dist = norm(0, self.model_noise_rate)
 
+        srv = Server(PfConfig, self.config_callback)
 
         #self.fig = plt.figure()
         #self.fig.show()
@@ -144,6 +148,11 @@ class ParticleFilter:
         self.occupancy_field = OccupancyField(got_map.map)
         self.initialized = True
         print "Initialization complete!"
+
+    def config_callback(self, config, level):
+        print "config.n_particles", config.n_particles
+        self.n_particles = config.n_particles
+        return config
 
     def create_pdf_lookup(self):
         pdf_lookup = {}
@@ -231,7 +240,9 @@ class ParticleFilter:
         """ Updates the particle weights in response to the scan contained in the msg """
         for particle in self.particle_cloud:
             weight = 0
-            for i,distance in enumerate(msg.ranges):
+            #for i,distance in enumerate(msg.ranges):
+            for i in range(0, len(msg.ranges), 5):
+                distance = msg.ranges[i]
                 theta = particle.theta #particle angle
                 phi = i * math.pi/180 #scan angle
                 point_x = particle.x + distance*math.cos(theta+phi)
