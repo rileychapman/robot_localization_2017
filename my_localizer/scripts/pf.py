@@ -105,10 +105,14 @@ class ParticleFilter:
 
         # TODO: define additional constants if needed
 
-        self.model_noise_rate = 0.05
+        self.model_noise_rate = rospy.get_param('~model_noise_rate', 0.05)
+        self.model_noise_floor = rospy.get_param('~model_noise_floor', 0.05)
 
-        self.linear_resample_sigma = 0.1
-        self.angular_resample_sigma = 5*math.pi/180
+        self.linear_initialization_sigma = rospy.get_param('~linear_initialization_sigma', 0.2)
+        self.angular_initialization_sigma = rospy.get_param('~angular_initialization_sigma', 5.0)
+
+        self.linear_resample_sigma = rospy.get_param('~linear_resample_sigma', 0.1)
+        self.angular_resample_sigma = rospy.get_param('~angular_resample_sigma', 5)*math.pi/180
 
         # Setup pubs and subs
 
@@ -211,12 +215,22 @@ class ParticleFilter:
         else:
             self.current_odom_xy_theta = new_odom_xy_theta
             return
-
         # For added difficulty: Implement sample_motion_odometry (Prob Rob p 136)
+
+        distance = math.sqrt(delta[0]**2 + delta[1]**2)
+
+        #print delta[0], delta[1], distance
+
         for i,particle in enumerate(self.particle_cloud):
-            particle.x -= gauss(delta[0], delta[0]*0.2)
-            particle.y -= gauss(delta[1], delta[1]*0.2)
-            particle.theta += gauss(delta[2], delta[2]*0.12)
+            # calculating new particle position
+            particle_x = math.cos(particle.theta) * distance
+            particle_y = math.sin(particle.theta) * distance
+            particle_distance = math.sqrt(particle_x**2 + particle_y**2)
+
+            # adding noise
+            particle.x += gauss(particle_x, particle_x*0.2)
+            particle.y += gauss(particle_y, particle_y*0.2)
+            particle.theta += gauss(delta[2], delta[2]*0.05)
 
 
     def map_calc_range(self,x,y,theta):
@@ -266,7 +280,7 @@ class ParticleFilter:
                     distance = 5.0
 
                 #point_weight = self.normal_dist.pdf(distance) + 0.08
-                point_weight = (math.sqrt(2) / math.sqrt(math.pi))  * math.exp(-1 * (distance**2 / 2*(self.model_noise_rate**2))) + 0.05
+                point_weight = (math.sqrt(2) / math.sqrt(math.pi))  * math.exp(-1 * (distance**2 / 2*(self.model_noise_rate**2))) + self.model_noise_floor
 
                 weight += point_weight
 
@@ -318,9 +332,9 @@ class ParticleFilter:
         self.particle_cloud = []
         for i in range(self.n_particles):
             particle = Particle()
-            particle.x = gauss(xy_theta[0],0.2)
-            particle.y = gauss(xy_theta[1],0.2)
-            particle.theta = gauss(xy_theta[2],5*math.pi/180)
+            particle.x = gauss(xy_theta[0],self.linear_initialization_sigma)
+            particle.y = gauss(xy_theta[1],self.linear_initialization_sigma)
+            particle.theta = gauss(xy_theta[2],self.angular_initialization_sigma*math.pi/180)
             self.particle_cloud.append(particle)
 
         self.normalize_particles()
