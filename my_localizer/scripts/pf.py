@@ -95,7 +95,8 @@ class ParticleFilter:
         self.odom_frame = "odom"        # the name of the odometry coordinate frame
         self.scan_topic = "scan"        # the topic where we will get laser scans from 
 
-        self.n_particles = rospy.get_param('~n_particles', 300)          # the number of particles to use
+        self.sample_factor = 0.25
+        self.n_particles = int(self.sample_factor * rospy.get_param('~n_particles', 300))/self.sample_factor          # the number of particles to use
 
         self.d_thresh = 0.2             # the amount of linear movement before performing an update
         self.a_thresh = math.pi/6       # the amount of angular movement before performing an update
@@ -105,6 +106,9 @@ class ParticleFilter:
         # TODO: define additional constants if needed
 
         self.model_noise_rate = 0.05
+
+        self.linear_resample_sigma = 0.1
+        self.angular_resample_sigma = 5*math.pi/180
 
         # Setup pubs and subs
 
@@ -169,17 +173,20 @@ class ParticleFilter:
         self.normalize_particles()
 
         # TODO: assign the lastest pose into self.robot_pose as a geometry_msgs.Pose object
-        largest_weight = 0.0
-        mode_particle = Particle()
+
+        avg_x = 0
+        avg_y = 0
+        avg_theta = 0
+
         for particle in self.particle_cloud:
-            if particle.w > largest_weight:
-                largest_weight = particle.w
-                mode_particle = particle
+            avg_x += particle.x * particle.w
+            avg_y += particle.y * particle.w
+            avg_theta += particle.theta * particle.w
 
-        qaurt_array = tf.transformations.quaternion_from_euler(0,0,mode_particle.theta)
-        pose = Pose(position = Point(x=mode_particle.x, y=mode_particle.y), orientation = Quaternion(x = qaurt_array[0], y = qaurt_array[1], z = qaurt_array[2], w = qaurt_array[3]) )
+        #print avg_x, avg_y, avg_theta
 
-        # just to get started we will fix the robot's pose to always be at the origin
+        quart_array = tf.transformations.quaternion_from_euler(0,0,avg_theta)
+        pose = Pose(position = Point(x=avg_x, y=avg_y), orientation = Quaternion(x = quart_array[0], y = quart_array[1], z = quart_array[2], w = quart_array[3]) )
         self.robot_pose = pose
 
     def update_particles_with_odom(self, msg):
@@ -190,6 +197,8 @@ class ParticleFilter:
 
             msg: this is not really needed to implement this, but is here just in case.
         """
+        # TODO: fix particle pose update, don't split up x, y, and theta
+
         new_odom_xy_theta = convert_pose_to_xy_and_theta(self.odom_pose.pose)
         # compute the change in x,y,theta since our last update
         if self.current_odom_xy_theta:
@@ -228,13 +237,17 @@ class ParticleFilter:
         for particle in self.particle_cloud:
             probabilities.append(particle.w)
 
-        samples = self.draw_random_sample(self.particle_cloud,probabilities,int(self.n_particles*0.5))
+        samples = self.draw_random_sample(self.particle_cloud,probabilities,int(self.n_particles*self.sample_factor))
 
         self.particle_cloud = []
         for i,particle in enumerate(samples):
-            for i in range(2):
-                self.particle_cloud.append(deepcopy(particle))
-
+            self.particle_cloud.append(deepcopy(particle))
+            for i in range(int(1/self.sample_factor)-1):
+                noise_particle = deepcopy(particle)
+                noise_particle.x = gauss(noise_particle.x, self.linear_resample_sigma)
+                noise_particle.y = gauss(noise_particle.y, self.linear_resample_sigma)            
+                noise_particle.theta = gauss(noise_particle.theta, self.angular_resample_sigma)            
+                self.particle_cloud.append(noise_particle)
 
     def update_particles_with_laser(self, msg):
         """ Updates the particle weights in response to the scan contained in the msg """
@@ -305,9 +318,9 @@ class ParticleFilter:
         self.particle_cloud = []
         for i in range(self.n_particles):
             particle = Particle()
-            particle.x = gauss(xy_theta[0],0.4)
-            particle.y = gauss(xy_theta[1],0.4)
-            particle.theta = gauss(xy_theta[2],12*math.pi/180)
+            particle.x = gauss(xy_theta[0],0.2)
+            particle.y = gauss(xy_theta[1],0.2)
+            particle.theta = gauss(xy_theta[2],5*math.pi/180)
             self.particle_cloud.append(particle)
 
         self.normalize_particles()
@@ -372,15 +385,21 @@ class ParticleFilter:
             self.current_odom_xy_theta = new_odom_xy_theta
             # update our map to odom transform now that the particles are initialized
             self.fix_map_to_odom_transform(msg)
-        elif (math.fabs(new_odom_xy_theta[0] - self.current_odom_xy_theta[0]) > self.d_thresh or
+        
+        # elif not self.current_odom_xy_theta:
+        #     self.current_odom_xy_theta = new_odom_xy_theta
+        
+
+        elif self.current_odom_xy_theta:
+            if (math.fabs(new_odom_xy_theta[0] - self.current_odom_xy_theta[0]) > self.d_thresh or
               math.fabs(new_odom_xy_theta[1] - self.current_odom_xy_theta[1]) > self.d_thresh or
               math.fabs(new_odom_xy_theta[2] - self.current_odom_xy_theta[2]) > self.a_thresh):
-            # we have moved far enough to do an update!
-            self.update_particles_with_odom(msg)    # update based on odometry
-            self.update_particles_with_laser(msg)   # update based on laser scan
-            self.update_robot_pose()                # update robot's pose
-            self.resample_particles()               # resample particles to focus on areas of high density
-            self.fix_map_to_odom_transform(msg)     # update map to odom transform now that we have new particles
+                # we have moved far enough to do an update!
+                self.update_particles_with_odom(msg)    # update based on odometry
+                self.update_particles_with_laser(msg)   # update based on laser scan
+                self.update_robot_pose()                # update robot's pose
+                self.resample_particles()               # resample particles to focus on areas of high density
+                self.fix_map_to_odom_transform(msg)     # update map to odom transform now that we have new particles
         # publish particles (so things like rviz can see them)
         self.publish_particles(msg)
 
