@@ -103,8 +103,8 @@ class ParticleFilter:
 
         self.laser_max_distance = 2.0   # maximum penalty to assess in the likelihood field model
 
-        # TODO: define additional constants if needed
-
+        # dynamically configured parameters
+        \
         self.model_noise_rate = rospy.get_param('~model_noise_rate', 0.05)
         self.model_noise_floor = rospy.get_param('~model_noise_floor', 0.05)
 
@@ -137,20 +137,18 @@ class ParticleFilter:
 
         self.normal_dist = norm(0, self.model_noise_rate)
 
+        # setup the dynamic reconfigure server
         srv = Server(PfConfig, self.config_callback)
 
         #self.fig = plt.figure()
         #self.fig.show()
 
         # request the map from the map server, the map should be of type nav_msgs/OccupancyGrid
-        # TODO: fill in the appropriate service call here.  The resultant map should be assigned be passed
-        #       into the init method for OccupancyField
         try:
             got_map = getmap()
             print "Got the map!"
         except rospy.ServiceException as exc:
             print("Service did not proess request: " + str(exc))
-
 
         # for now we have commented out the occupancy field initialization until you can successfully fetch the map
         self.occupancy_field = OccupancyField(got_map.map)
@@ -176,8 +174,7 @@ class ParticleFilter:
         # first make sure that the particle weights are normalized
         self.normalize_particles()
 
-        # TODO: assign the lastest pose into self.robot_pose as a geometry_msgs.Pose object
-
+        # calculate the new robot pose from a weighted average of the particle poses
         avg_x = 0
         avg_y = 0
         avg_theta = 0
@@ -187,8 +184,7 @@ class ParticleFilter:
             avg_y += particle.y * particle.w
             avg_theta += particle.theta * particle.w
 
-        #print avg_x, avg_y, avg_theta
-
+        # convert weighted average particle pose to a quaternion
         quart_array = tf.transformations.quaternion_from_euler(0,0,avg_theta)
         pose = Pose(position = Point(x=avg_x, y=avg_y), orientation = Quaternion(x = quart_array[0], y = quart_array[1], z = quart_array[2], w = quart_array[3]) )
         self.robot_pose = pose
@@ -201,7 +197,6 @@ class ParticleFilter:
 
             msg: this is not really needed to implement this, but is here just in case.
         """
-        # TODO: fix particle pose update, don't split up x, y, and theta
 
         new_odom_xy_theta = convert_pose_to_xy_and_theta(self.odom_pose.pose)
         # compute the change in x,y,theta since our last update
@@ -215,19 +210,17 @@ class ParticleFilter:
         else:
             self.current_odom_xy_theta = new_odom_xy_theta
             return
-        # For added difficulty: Implement sample_motion_odometry (Prob Rob p 136)
 
+        # calculate the distance that the robot moved forward
         distance = math.sqrt(delta[0]**2 + delta[1]**2)
 
-        #print delta[0], delta[1], distance
-
         for i,particle in enumerate(self.particle_cloud):
-            # calculating new particle position
+            # calculate change in particle position based on this distance
             particle_x = math.cos(particle.theta) * distance
             particle_y = math.sin(particle.theta) * distance
             particle_distance = math.sqrt(particle_x**2 + particle_y**2)
 
-            # adding noise
+            # adding Gaussian noise to calculated particle position
             particle.x += gauss(particle_x, particle_x*0.2)
             particle.y += gauss(particle_y, particle_y*0.2)
             particle.theta += gauss(delta[2], delta[2]*0.05)
@@ -251,13 +244,16 @@ class ParticleFilter:
         for particle in self.particle_cloud:
             probabilities.append(particle.w)
 
+        # drawing a sample of particles with preference for the higher probability particles
         samples = self.draw_random_sample(self.particle_cloud,probabilities,int(self.n_particles*self.sample_factor))
 
         self.particle_cloud = []
         for i,particle in enumerate(samples):
+            # duplicate these sampled particles to fill out the particle cloud
             self.particle_cloud.append(deepcopy(particle))
             for i in range(int(1/self.sample_factor)-1):
                 noise_particle = deepcopy(particle)
+                # add noise to these particle positions and orientations
                 noise_particle.x = gauss(noise_particle.x, self.linear_resample_sigma)
                 noise_particle.y = gauss(noise_particle.y, self.linear_resample_sigma)            
                 noise_particle.theta = gauss(noise_particle.theta, self.angular_resample_sigma)            
@@ -267,21 +263,22 @@ class ParticleFilter:
         """ Updates the particle weights in response to the scan contained in the msg """
         for particle in self.particle_cloud:
             weight = 0
-            #for i,distance in enumerate(msg.ranges):
             for i in range(0, len(msg.ranges), 5):
                 distance = msg.ranges[i]
-                theta = particle.theta #particle angle
-                phi = i * math.pi/180 #scan angle
+                theta = particle.theta # particle angle
+                phi = i * math.pi/180 # scan angle
+                
+                # coordinates of the projected laser scan point
                 point_x = particle.x + distance*math.cos(theta+phi)
                 point_y = particle.y + distance*math.sin(theta+phi)
                
+                # distance to closest obstacle from laser scan point
                 distance = self.occupancy_field.get_closest_obstacle_distance(point_x, point_y)
                 if math.isnan(distance):
                     distance = 5.0
 
-                #point_weight = self.normal_dist.pdf(distance) + 0.08
+                # calculate weight of particle from approximation of the normal distribution function
                 point_weight = (math.sqrt(2) / math.sqrt(math.pi))  * math.exp(-1 * (distance**2 / 2*(self.model_noise_rate**2))) + self.model_noise_floor
-
                 weight += point_weight
 
 
@@ -330,6 +327,9 @@ class ParticleFilter:
         if xy_theta == None:
             xy_theta = convert_pose_to_xy_and_theta(self.odom_pose.pose)
         self.particle_cloud = []
+        
+        # initialized each particle with a Gaussian noise around a given pose
+        # noise is dynamically configurable
         for i in range(self.n_particles):
             particle = Particle()
             particle.x = gauss(xy_theta[0],self.linear_initialization_sigma)
