@@ -7,9 +7,10 @@ import rospy
 from dynamic_reconfigure.server import Server
 from my_localizer.cfg import PfConfig
 
-from std_msgs.msg import Header, String
+from std_msgs.msg import Header, String, ColorRGBA
 from sensor_msgs.msg import LaserScan
-from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, PoseArray, Pose, Point, Quaternion
+from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, PoseArray, Pose, Point, Quaternion, Vector3
+from visualization_msgs.msg import Marker, MarkerArray
 from nav_msgs.srv import GetMap
 from copy import deepcopy
 
@@ -24,6 +25,8 @@ import time
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.colors as colors
+import matplotlib.cm as cmx 
 from numpy.random import random_sample
 from sklearn.neighbors import NearestNeighbors
 from occupancy_field import OccupancyField
@@ -95,7 +98,7 @@ class ParticleFilter:
         self.odom_frame = "odom"        # the name of the odometry coordinate frame
         self.scan_topic = "scan"        # the topic where we will get laser scans from 
 
-        self.sample_factor = 0.25
+        self.sample_factor = rospy.get_param('~sample_factor', 0.25)
         self.n_particles = int(self.sample_factor * rospy.get_param('~n_particles', 300))/self.sample_factor          # the number of particles to use
 
         self.d_thresh = 0.2             # the amount of linear movement before performing an update
@@ -120,6 +123,7 @@ class ParticleFilter:
         self.pose_listener = rospy.Subscriber("initialpose", PoseWithCovarianceStamped, self.update_initial_pose)
         # publish the current particle cloud.  This enables viewing particles in rviz.
         self.particle_pub = rospy.Publisher("particlecloud", PoseArray, queue_size=10)
+        self.particle_color_pub = rospy.Publisher("color_particlecloud", MarkerArray, queue_size=10)
 
         # laser_subscriber listens for data from the lidar
         self.laser_subscriber = rospy.Subscriber(self.scan_topic, LaserScan, self.scan_received)
@@ -360,6 +364,28 @@ class ParticleFilter:
                                             frame_id=self.map_frame),
                                   poses=particles_conv))
 
+    def publish_particles_colored(self):
+        """ published particles as a marker array with color mapped to particle weight
+            Jonah helped with this
+        """
+
+        markers = []
+
+        #generate color map
+        weights = np.array([p.w for p in self.particle_cloud])
+        cm= plt.get_cmap('jet')
+        cNorm = colors.Normalize(vmin=np.min(weights), vmax=np.max(weights))
+        scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=cm)
+        color_vals = scalarMap.to_rgba(weights, alpha=0.5)
+
+        for i,particle in enumerate(self.particle_cloud):
+            particle_color = color_vals[i, :]
+            marker = self.create_arrow(i, particle.as_pose(), particle_color)
+            markers.append(marker)
+
+        self.particle_color_pub.publish(MarkerArray(markers=markers))
+
+
     def scan_received(self, msg):
         """ This is the default logic for what to do when processing scan data.
             Feel free to modify this, however, I hope it will provide a good
@@ -415,7 +441,8 @@ class ParticleFilter:
                 self.resample_particles()               # resample particles to focus on areas of high density
                 self.fix_map_to_odom_transform(msg)     # update map to odom transform now that we have new particles
         # publish particles (so things like rviz can see them)
-        self.publish_particles(msg)
+        #self.publish_particles(msg)
+        self.publish_particles_colored()
 
 
     def fix_map_to_odom_transform(self, msg):
@@ -444,6 +471,7 @@ class ParticleFilter:
                                           self.map_frame)
 
     def visualize_particles(self):
+        """ Not very helpful attemp to visualize particles with a heat map """
         x = np.array([])
         y = np.array([])
         for particle in self.particle_cloud:
@@ -459,6 +487,21 @@ class ParticleFilter:
         subplot.imshow(heatmap.T, extent=extent, origin='lower')
         plt.draw()
         plt.pause(.01)
+
+    def create_arrow(self, index, pose, color):
+        marker = Marker(
+            type = Marker.ARROW,
+            id = index,
+            header = Header( 
+                stamp = rospy.Time.now(),
+                frame_id = self.map_frame
+                ),
+            pose = pose,
+            scale = Vector3(0.4, 0.05, 0.05),
+            color = ColorRGBA(color[0], color[1], color[2], color[3])
+            )
+        return marker
+
 
 if __name__ == '__main__':
     n = ParticleFilter()
