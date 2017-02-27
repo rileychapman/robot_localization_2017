@@ -36,7 +36,7 @@ We also chose to use a Gaussian distribution wherever we added noise to the posi
 
 ##Challenges
 
-We did not figure out how to effectively visualize the weights of the particles, which would have been helpful when debugging our sensor model. We created a heatmap of the particles using matplotlib, but it was rather difficult to parse how the figure related to the robot. We ran up against the limitation of pose arrays that keeps them all the same color. 
+One challenge that we faced was figuring out how to effectively visualize the weights of the particles.  Without knowing the relative weights of our particles, it was difficult to debug our sensor model efficiently.  After realizing that individual arrows within PoseArrays cannot be customized, we learned how to use a matplotlib colormap to color the particles based on their weights.
 
 ##Future Work
 
