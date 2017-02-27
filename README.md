@@ -17,7 +17,7 @@ At each laser scan update, we weight each of the particles based on how well the
 
 We next determine the best guess for the robot pose by computing a weighted average of particle position and orientation based on particle weight. 
 
-To resample the particles, we randomly select a fraction of them, with higher weight particles being more likely to be chosen. We then fill out the rest of the particle could by duplicating the sampled particles, adding a bit of Gaussian noise. 
+To resample the particles, we randomly select a fraction of them, with higher weight particles being more likely to be chosen. We then fill out the rest of the particle cloud by duplicating the sampled particles, adding a bit of Gaussian noise. 
 
 To make tuning the particle filter an easier process, we added the ability to dynamically reconfigure certain useful parameters. We set up dynamic reconfiguration for:
 - Number of particles
@@ -45,3 +45,5 @@ Our calculated robot pose drifts from the actual pose especially while turning c
 ##Lessons
 
 Double check your trig.
+
+![image](screenshots/colored_weights.png)
