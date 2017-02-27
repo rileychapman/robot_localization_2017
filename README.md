@@ -26,6 +26,10 @@ To make tuning the particle filter an easier process, we added the ability to dy
 - Sensor model level of tolerance to imperfections in the map
 - Standard deviation of Gaussian noise used to initialize the particle cloud (for both position and orientation)
  
+![image](screenshots/colored_weights.png)
+
+Figure 1: A visualization of our weighted particles while running our particle filter.  The dynamically configurable parameters can be seen on the left.  
+
 ##Design Decisions
 
 We ran into an issue in which our code ran slower than the rate of data coming at it. We needed to make adjustments so that it did not drift away from real time. The main culprit of our speed problems was the nested for loop that weighted the particles based on a laser scan. One quick adjustment that we made was to only look at every 5th laser scan detection. In theory, this made the inner for loop run 5 times faster, but sacrifices some accuracy in the weighting of the particles. We also decided to push as much of our weighting math outside the for loop as possible. Instead of creating a normal distribution and calculating its probability distribution function each time through the loop, we created the normal distribution outside the loop. When that wasn’t fast enough, we used an approximation of the normal distribution that could be quickly calculated inside the loop. 
@@ -47,5 +51,3 @@ Our calculated robot pose drifts from the actual pose especially while turning c
 ##Lessons
 
 Double check your trig.
-
-![image](screenshots/colored_weights.png)
