@@ -51,3 +51,7 @@ Our calculated robot pose drifts from the actual pose especially while turning c
 ##Lessons
 
 Double check your trig.
+
+Spend time up front developing useful visualiations. 
+
+Spend time making tuning faster and easier. 
