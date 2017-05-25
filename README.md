@@ -1,13 +1,13 @@
-#Robot Localization Project
+# Robot Localization Project
 Riley Chapman and Bonnie Ishiguro  
 Computational Robotics 2017, Olin College of Engineering 
 
 
-##Goal
+## Goal
 
 The goal of this project is to allow the robot to accurately guess its position within a mapped environment using its laser scanner and a particle filter.
 
-##Approach
+## Approach
 
 We first initialize a certain number of particles in a Gaussian distribution around a given pose position on the map.
 
@@ -30,7 +30,7 @@ To make tuning the particle filter an easier process, we added the ability to dy
 
 Figure 1: A visualization of our weighted particles while running our particle filter.  The dynamically configurable parameters can be seen on the left.  
 
-##Design Decisions
+## Design Decisions
 
 We ran into an issue in which our code ran slower than the rate of data coming at it. We needed to make adjustments so that it did not drift away from real time. The main culprit of our speed problems was the nested for loop that weighted the particles based on a laser scan. One quick adjustment that we made was to only look at every 5th laser scan detection. In theory, this made the inner for loop run 5 times faster, but sacrifices some accuracy in the weighting of the particles. We also decided to push as much of our weighting math outside the for loop as possible. Instead of creating a normal distribution and calculating its probability distribution function each time through the loop, we created the normal distribution outside the loop. When that wasn’t fast enough, we used an approximation of the normal distribution that could be quickly calculated inside the loop. 
 
@@ -38,14 +38,14 @@ We decided to use a normal distribution for our sensor model, so that the partic
 
 We also chose to use a Gaussian distribution wherever we added noise to the position and orientation of newly-initialized or resample particles.
 
-##Challenges
+## Challenges
 
 One challenge that we faced was figuring out how to effectively visualize the weights of the particles.  Without knowing the relative weights of our particles, it was difficult to debug our sensor model efficiently.  After realizing that individual arrows within PoseArrays cannot be customized, we learned how to use a matplotlib colormap to color the particles based on their weights.
 
-##Future Work
+## Future Work
 
 Our calculated robot pose drifts from the actual pose especially while turning corners, and we would like to experiment with more tuning to improve our particle filter’s performance.
 
-##Lessons
+## Lessons
 
 Double check your trig.
