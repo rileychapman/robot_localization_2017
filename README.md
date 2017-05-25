@@ -36,6 +36,9 @@ We ran into an issue in which our code ran slower than the rate of data coming a
 
 We decided to use a normal distribution for our sensor model, so that the particles which more closely matched the laser scan data had the higher weights.
 
+![image](screenshots/sensor_model.png)
+![image](screenshots/equation.png)
+
 We also chose to use a Gaussian distribution wherever we added noise to the position and orientation of newly-initialized or resample particles.
 
 ## Challenges
@@ -49,3 +52,7 @@ Our calculated robot pose drifts from the actual pose especially while turning c
 ## Lessons
 
 Double check your trig.
+
+Spend time up front developing useful visualiations. 
+
+Spend time making tuning faster and easier. 
